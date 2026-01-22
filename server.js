@@ -2,7 +2,7 @@ const express = require("express");
 const puppeteer = require("puppeteer");
 
 const app = express();
-app.use(express.json({ limit: "5mb" })); // subimos límite por el HTML
+app.use(express.json({ limit: "5mb" }));
 
 app.get("/health", (req, res) => {
   res.status(200).send("ok");
@@ -19,7 +19,6 @@ app.post("/echo", (req, res) => {
   });
 });
 
-// ✅ Nuevo: HTML -> PDF (base64)
 app.post("/pdf", async (req, res) => {
   try {
     const { html } = req.body || {};
@@ -62,6 +61,40 @@ app.post("/pdf", async (req, res) => {
       error: "PDF generation failed",
       details: String(err?.message || err),
     });
+  }
+});
+
+// ✅ ESTE endpoint va ANTES del listen()
+app.get("/pdf/test", async (req, res) => {
+  const html = `
+  <html>
+    <body style="font-family: Arial; padding: 24px;">
+      <h2>PDF Test</h2>
+      <p>Si ves esto en PDF, Puppeteer está OK.</p>
+    </body>
+  </html>`;
+
+  try {
+    const browser = await puppeteer.launch({
+      headless: "new",
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: "networkidle0" });
+
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      printBackground: true,
+    });
+
+    await browser.close();
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", "inline; filename=test.pdf");
+    return res.status(200).send(pdfBuffer);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err?.message || err) });
   }
 });
 
